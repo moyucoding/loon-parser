@@ -1,9 +1,17 @@
 /*
  * Loon resource parser.
- * Loon supplies the downloaded resource as $resource.content. We decode a
- * Base64 subscription when needed, convert only anytls:// entries, and leave
- * every other line untouched for Loon's normal parser.
+ * Fetch the provider's Clash/URI representation directly, decode Base64 when
+ * needed, convert only anytls:// entries, and leave every other line untouched
+ * for Loon's normal parser.
  */
+
+const SOURCE_SUFFIX = "?t=clash";
+
+function sourceUrlFromResource(resource) {
+  const link = resource && resource.link ? String(resource.link) : "";
+  if (!link) return "";
+  return link.replace(/[?#].*$/, "") + SOURCE_SUFFIX;
+}
 
 function safeDecodeURIComponent(value) {
   try { return decodeURIComponent(value); } catch (_) { return value; }
@@ -121,10 +129,28 @@ function transformSubscription(content) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { decodeBase64Utf8, maybeDecodeSubscription, parseAnyTLS, transformSubscription };
+  module.exports = { SOURCE_SUFFIX, sourceUrlFromResource, decodeBase64Utf8, maybeDecodeSubscription, parseAnyTLS, transformSubscription };
 }
 
-if (typeof $resource !== "undefined" && typeof $done === "function") {
-  try { $done(transformSubscription($resource.content)); }
-  catch (error) { console.log(`AnyTLS parser failed: ${error.message}`); $done(""); }
+if (typeof $done === "function" && typeof $httpClient !== "undefined") {
+  const sourceUrl = sourceUrlFromResource(typeof $resource !== "undefined" ? $resource : null);
+  if (!sourceUrl) {
+    console.log("AnyTLS parser request skipped: Loon did not provide a resource URL");
+    $done("");
+  } else {
+  $httpClient.get({
+    url: sourceUrl,
+    timeout: 30000,
+    headers: { "User-Agent": "Loon" },
+    "auto-redirect": true,
+  }, (error, response, data) => {
+    if (error || !response || response.status < 200 || response.status >= 400) {
+      console.log(`AnyTLS parser request failed: ${error || `HTTP ${response && response.status}`}`);
+      $done("");
+      return;
+    }
+    try { $done(transformSubscription(data)); }
+    catch (parseError) { console.log(`AnyTLS parser failed: ${parseError.message}`); $done(""); }
+  });
+  }
 }

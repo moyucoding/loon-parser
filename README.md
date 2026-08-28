@@ -1,6 +1,6 @@
 # Loon AnyTLS Parser
 
-一个面向 Loon 3.5.0(969)+ 的资源解析器插件：把远程订阅中的 `anytls://` URI 转换成 Loon 可识别的 `AnyTLS` 节点行，同时保留其他协议和原始内容。
+一个面向 Loon 3.5.0(969)+ 的资源解析器插件：从当前订阅地址自动追加 `?t=clash` 获取 Clash/URI 内容，把其中的 `anytls://` URI 转换成 Loon 可识别的 `AnyTLS` 节点行，同时保留其他协议。
 
 ## 文件
 
@@ -16,7 +16,7 @@
 
 3. 添加远程节点订阅时启用解析器。
 
-脚本使用 Loon 传入的 `$resource.content`，因此不会把订阅地址或节点密码发送到第三方服务。Base64 订阅会先解码；非 Base64 内容直接逐行处理。只有格式正确的 `anytls://` 行会被转换，无法识别的行原样返回。Parser 脚本按照 Loon 接口直接通过 `$done(字符串)` 返回完整配置文本。
+脚本在 Loon 中读取 `$resource.link`，删除原有查询参数后追加 `?t=clash` 主动请求；订阅令牌不会写入仓库。Base64 订阅会先解码；非 Base64 内容直接逐行处理。只有格式正确的 `anytls://` 行会被转换，其他 URI 原样返回。Parser 脚本按照 Loon 接口直接通过 `$done(字符串)` 返回完整文本。
 
 ## 支持的 AnyTLS 参数
 
