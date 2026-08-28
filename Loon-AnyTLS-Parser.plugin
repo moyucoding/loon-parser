@@ -1,5 +1,5 @@
 #!name=Loon AnyTLS Parser
-#!desc=将订阅中的 anytls:// URI 转换为 Loon AnyTLS 节点格式，其他内容保持不变
+#!desc=将订阅中的 anytls:// URI 转换为 Loon AnyTLS 节点格式，其他内容保持不变｜更新时间：2026-08-28
 #!author=moyucoding
 #!homepage=https://github.com/moyucoding/loon-parser
 #!loon_version=3.5.0(969)
