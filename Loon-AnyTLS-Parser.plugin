@@ -1,0 +1,9 @@
+#!name=Loon AnyTLS Parser
+#!desc=将订阅中的 anytls:// URI 转换为 Loon AnyTLS 节点格式，其他内容保持不变
+#!author=moyucoding
+#!homepage=https://github.com/moyucoding/loon-parser
+#!loon_version=3.5.0(969)
+#!type=parser
+
+[Script]
+generic script-path=https://raw.githubusercontent.com/moyucoding/loon-parser/main/parser.js,tag=AnyTLS Parser,timeout=30
