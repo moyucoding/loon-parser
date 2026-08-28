@@ -13,12 +13,29 @@ function decodeBase64Utf8(value) {
   const normalized = value.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
   if (!/^[A-Za-z0-9+/]*={0,2}$/.test(normalized) || normalized.length % 4 === 1) return null;
   try {
-    const binary = atob(normalized + "=".repeat((4 - normalized.length % 4) % 4));
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let binary = "";
+    let buffer = 0;
+    let bits = 0;
+    for (let i = 0; i < normalized.length; i += 1) {
+      const char = normalized.charAt(i);
+      if (char === "=") break;
+      const value6 = alphabet.indexOf(char);
+      if (value6 < 0) return null;
+      buffer = (buffer << 6) | value6;
+      bits += 6;
+      if (bits >= 8) {
+        bits -= 8;
+        binary += String.fromCharCode((buffer >> bits) & 255);
+      }
+    }
     let escaped = "";
     for (let i = 0; i < binary.length; i += 1) {
-      escaped += `%${binary.charCodeAt(i).toString(16).padStart(2, "0")}`;
+      const hex = binary.charCodeAt(i).toString(16);
+      escaped += `%${hex.length === 1 ? "0" : ""}${hex}`;
     }
-    return decodeURIComponent(escaped);
+    try { return decodeURIComponent(escaped); }
+    catch (_) { return binary; }
   } catch (_) { return null; }
 }
 
@@ -41,15 +58,48 @@ function escapeQuoted(value) {
   return String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
+function parseQuery(query) {
+  const result = {};
+  query.split("&").forEach(pair => {
+    if (!pair) return;
+    const separator = pair.indexOf("=");
+    const key = separator < 0 ? pair : pair.slice(0, separator);
+    const value = separator < 0 ? "" : pair.slice(separator + 1);
+    result[safeDecodeURIComponent(key.replace(/\+/g, " "))] = safeDecodeURIComponent(value.replace(/\+/g, " "));
+  });
+  return result;
+}
+
 function parseAnyTLS(uri) {
-  const parsed = new URL(uri);
-  const name = safeDecodeURIComponent((parsed.hash || "").slice(1)) || "AnyTLS";
-  const password = safeDecodeURIComponent(parsed.username || "");
-  const server = parsed.hostname;
-  const port = parsed.port || "443";
-  const sni = parsed.searchParams.get("sni") || parsed.searchParams.get("peer") || "";
-  const insecure = parsed.searchParams.get("insecure") === "1" || parsed.searchParams.get("allowInsecure") === "1";
-  const udp = parsed.searchParams.get("udp");
+  const withoutScheme = uri.replace(/^anytls:\/\//i, "");
+  const hashIndex = withoutScheme.indexOf("#");
+  const name = hashIndex >= 0 ? safeDecodeURIComponent(withoutScheme.slice(hashIndex + 1)) || "AnyTLS" : "AnyTLS";
+  const beforeHash = hashIndex >= 0 ? withoutScheme.slice(0, hashIndex) : withoutScheme;
+  const queryIndex = beforeHash.indexOf("?");
+  const authority = queryIndex >= 0 ? beforeHash.slice(0, queryIndex) : beforeHash;
+  const query = queryIndex >= 0 ? parseQuery(beforeHash.slice(queryIndex + 1)) : {};
+  const atIndex = authority.lastIndexOf("@");
+  const credentials = atIndex >= 0 ? authority.slice(0, atIndex) : "";
+  const hostPort = atIndex >= 0 ? authority.slice(atIndex + 1) : authority;
+  const password = safeDecodeURIComponent(credentials);
+  let server = hostPort;
+  let port = "443";
+  if (hostPort.charAt(0) === "[") {
+    const closingBracket = hostPort.indexOf("]");
+    if (closingBracket >= 0) {
+      server = hostPort.slice(1, closingBracket);
+      if (hostPort.charAt(closingBracket + 1) === ":") port = hostPort.slice(closingBracket + 2) || port;
+    }
+  } else {
+    const colonIndex = hostPort.lastIndexOf(":");
+    if (colonIndex > 0 && /^[0-9]+$/.test(hostPort.slice(colonIndex + 1))) {
+      server = hostPort.slice(0, colonIndex);
+      port = hostPort.slice(colonIndex + 1);
+    }
+  }
+  const sni = query.sni || query.peer || "";
+  const insecure = query.insecure === "1" || query.allowInsecure === "1";
+  const udp = query.udp === undefined ? null : query.udp;
   if (!password || !server) throw new Error("missing AnyTLS password or server");
 
   let result = `${name.replace(/[\r\n]/g, " ")} = AnyTLS,${server},${port},"${escapeQuoted(password)}"`;
