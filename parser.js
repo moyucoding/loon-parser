@@ -125,6 +125,6 @@ if (typeof module !== "undefined") {
 }
 
 if (typeof $resource !== "undefined" && typeof $done === "function") {
-  try { $done({ content: transformSubscription($resource.content) }); }
-  catch (error) { $done({ error: `AnyTLS parser failed: ${error.message}` }); }
+  try { $done(transformSubscription($resource.content)); }
+  catch (error) { console.log(`AnyTLS parser failed: ${error.message}`); $done(""); }
 }
