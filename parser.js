@@ -5,6 +5,22 @@
  * for Loon's normal parser.
  */
 
+function parserLog(message) {
+  try { console.log(`[AnyTLS Parser][WARN] ${message}`); } catch (_) {}
+}
+
+function maskUrl(value) {
+  const url = String(value || "");
+  if (!url) return "(empty)";
+  return url.replace(/(\/newlook\/)[^/?#]+/i, "$1***");
+}
+
+function resourceSummary(resource) {
+  if (!resource || typeof resource !== "object") return "(missing or non-object)";
+  try { return `keys=${Object.keys(resource).join(",") || "(none)"}`; }
+  catch (_) { return "(unreadable)"; }
+}
+
 function sourceUrlFromResource(resource) {
   const link = resource && resource.link ? String(resource.link) : "";
   if (!link) return "";
@@ -56,8 +72,18 @@ function looksLikeBase64(value) {
 function maybeDecodeSubscription(content) {
   const raw = String(content || "");
   const trimmed = raw.trim();
-  if (!looksLikeBase64(trimmed)) return raw;
-  return decodeBase64Utf8(trimmed) || raw;
+  const base64 = looksLikeBase64(trimmed);
+  return base64 ? (decodeBase64Utf8(trimmed) || raw) : raw;
+}
+
+function protocolStats(content) {
+  const stats = {};
+  String(content || "").split(/\r?\n/).forEach(line => {
+    const match = line.trim().match(/^([a-z0-9+.-]+):\/\//i);
+    const protocol = match ? match[1].toLowerCase() : "other";
+    stats[protocol] = (stats[protocol] || 0) + 1;
+  });
+  return Object.keys(stats).sort().map(key => `${key}=${stats[key]}`).join(", ") || "(empty)";
 }
 
 function escapeQuoted(value) {
@@ -131,24 +157,47 @@ if (typeof module !== "undefined") {
 }
 
 if (typeof $done === "function" && typeof $httpClient !== "undefined") {
-  const sourceUrl = sourceUrlFromResource(typeof $resource !== "undefined" ? $resource : null);
+  const resource = typeof $resource !== "undefined" ? $resource : null;
+  parserLog(`script started; resource ${resourceSummary(resource)}`);
+  const sourceUrl = sourceUrlFromResource(resource);
+  parserLog(`source URL: ${maskUrl(sourceUrl)}`);
   if (!sourceUrl) {
-    console.log("AnyTLS parser request skipped: Loon did not provide a resource URL");
+    parserLog("request skipped: Loon did not provide a resource URL");
     $done("");
   } else {
+  parserLog("starting subscription request; timeout=30000ms; user-agent=Loon; auto-redirect=true");
   $httpClient.get({
     url: sourceUrl,
     timeout: 30000,
     headers: { "User-Agent": "Loon" },
     "auto-redirect": true,
   }, (error, response, data) => {
+    parserLog(`request callback; error=${error ? String(error) : "none"}; status=${response && response.status != null ? response.status : "(none)"}`);
     if (error || !response || response.status < 200 || response.status >= 400) {
-      console.log(`AnyTLS parser request failed: ${error || `HTTP ${response && response.status}`}`);
+      parserLog(`request failed: ${error || `HTTP ${response && response.status}`}`);
       $done("");
       return;
     }
-    try { $done(transformSubscription(data)); }
-    catch (parseError) { console.log(`AnyTLS parser failed: ${parseError.message}`); $done(""); }
+    try {
+      const raw = String(data || "");
+      const decoded = maybeDecodeSubscription(raw);
+      const inputLines = decoded.split(/\r?\n/).filter(Boolean);
+      const inputAnyTLS = inputLines.filter(line => /^anytls:\/\//i.test(line)).length;
+      parserLog(`response received; raw-length=${raw.length}; trimmed-length=${raw.trim().length}; decoded-length=${decoded.length}`);
+      parserLog(`response shape; raw-first-char=${raw.trim().charAt(0) || "(empty)"}; decoded-lines=${inputLines.length}; protocols=${protocolStats(decoded)}`);
+      parserLog(`decoded AnyTLS URI count=${inputAnyTLS}`);
+      const output = transformSubscription(raw);
+      const outputLines = output.split(/\r?\n/).filter(Boolean);
+      const outputAnyTLS = outputLines.filter(line => /= AnyTLS,/i.test(line)).length;
+      parserLog(`transform complete; output-lines=${outputLines.length}; output AnyTLS count=${outputAnyTLS}; conversion delta=${outputAnyTLS - inputAnyTLS}`);
+      parserLog("calling $done with transformed subscription");
+      $done(output);
+      parserLog("$done completed");
+    }
+    catch (parseError) {
+      parserLog(`parser exception: ${parseError && parseError.message ? parseError.message : String(parseError)}`);
+      $done("");
+    }
   });
   }
 }
