@@ -1,13 +1,14 @@
 /*
  * Loon resource parser.
- * Fetch the provider's Clash/URI representation directly, decode Base64 when
+ * Fetch the provider's raw URI representation directly, decode Base64 when
  * needed, convert only anytls:// entries, and leave every other line untouched
  * for Loon's normal parser.
  */
 
 function sourceUrlFromResource(resource) {
   const link = resource && resource.link ? String(resource.link) : "";
-  return link;
+  if (!link) return "";
+  return link.replace(/[?#].*$/, "") + "?=clash";
 }
 
 function safeDecodeURIComponent(value) {
