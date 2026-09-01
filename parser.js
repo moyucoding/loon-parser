@@ -5,12 +5,9 @@
  * for Loon's normal parser.
  */
 
-const SOURCE_SUFFIX = "?t=clash";
-
 function sourceUrlFromResource(resource) {
   const link = resource && resource.link ? String(resource.link) : "";
-  if (!link) return "";
-  return link.replace(/[?#].*$/, "") + SOURCE_SUFFIX;
+  return link;
 }
 
 function safeDecodeURIComponent(value) {
@@ -129,7 +126,7 @@ function transformSubscription(content) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { SOURCE_SUFFIX, sourceUrlFromResource, decodeBase64Utf8, maybeDecodeSubscription, parseAnyTLS, transformSubscription };
+  module.exports = { sourceUrlFromResource, decodeBase64Utf8, maybeDecodeSubscription, parseAnyTLS, transformSubscription };
 }
 
 if (typeof $done === "function" && typeof $httpClient !== "undefined") {
